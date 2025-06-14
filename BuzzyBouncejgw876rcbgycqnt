@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buzzy Bounce</title> 
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation; 
+            overflow: hidden; 
+        }
+        .game-container {
+            width: 100%;
+            height: 100vh; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(to bottom, #87CEEB, #b0e0e6); 
+        }
+        canvas {
+            border: 2px solid #222; 
+            border-radius: 8px;
+            max-width: 100%;
+            max-height: 80vh; 
+        }
+        .modal {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .btn-game { /* This class will be applied to the <a> tag too */
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            text-decoration: none; /* Ensure links don't have underline by default */
+            display: inline-block; /* Important for applying padding correctly to <a> */
+        }
+        .btn-game:active {
+            transform: scale(0.95);
+        }
+        .btn-primary { background-color: #4CAF50; color: white; }
+        .btn-primary:hover { background-color: #45a049; }
+        .btn-secondary { background-color: #f0ad4e; color: white; }
+        .btn-secondary:hover { background-color: #ec9c3b; }
+        .btn-danger { background-color: #d9534f; color: white; }
+        .btn-danger:hover { background-color: #c9302c; }
+        .btn-info { background-color: #5bc0de; color: white; }
+        .btn-info:hover { background-color: #46b8da; }
+        .btn-icon {
+            background: none;
+            border: none;
+            font-size: 1.25rem; 
+            padding: 0.4rem;
+            color: #333;
+        }
+        .heart-icon {
+            color: red;
+            font-size: 1.25rem; 
+            margin-left: 3px;
+        }
+        .top-bar-text { 
+            font-size: 1rem; 
+        }
+        @media (min-width: 640px) { 
+            .top-bar-text {
+                font-size: 1.125rem; 
+            }
+            .btn-icon {
+                font-size: 1.375rem; 
+                 padding: 0.5rem;
+            }
+            .heart-icon {
+                font-size: 1.375rem;
+            }
+        }
+
+    </style>
+</head>
+<body class="bg-sky-100 select-none">
+
+    <audio id="backgroundMusicPlayer" loop src="Buzzy Bounce music.mp3"></audio>
+    <audio id="crashSoundPlayer" src="crash sound.mp3"></audio>
+
+
+    <div id="gameContainer" class="game-container p-2 sm:p-4">
+        <div id="topBar" class="w-full max-w-lg mb-2 flex justify-between items-center px-1">
+            <div>
+                <span class="top-bar-text font-bold text-yellow-900">Score: <span id="scoreDisplay">0</span></span>
+            </div>
+            <div class="flex items-center">
+                <span class="top-bar-text font-bold text-red-700">Lives:</span>
+                <div id="livesDisplay" class="flex">
+                </div>
+            </div>
+            <div class="flex items-center space-x-1 sm:space-x-2"> 
+                <button id="pauseResumeButton" class="btn-icon" aria-label="Pause Game">❚❚</button> 
+                <button id="settingsButton" class="btn-icon" aria-label="Open Settings">⚙️</button> 
+            </div>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="startScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-opacity-0 text-white p-4 z-20">
+            <h1 class="text-4xl sm:text-5xl font-bold mb-4 text-yellow-400 drop-shadow-lg">Buzzy Bounce</h1> 
+            <p class="text-lg sm:text-xl mb-6 text-center text-gray-100 drop-shadow-md">Tap or Press Space to make the bee fly!</p>
+            <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                <button id="startGameButton" class="btn-game btn-primary text-xl px-8">Start Game</button>
+                <a href="index.html" id="exitGameLink" class="btn-game btn-danger text-xl px-8">Exit</a> 
+            </div>
+        </div>
+
+        <div id="gameOverScreen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 text-white p-4 z-20">
+            <h2 class="text-3xl sm:text-4xl font-bold mb-3 text-red-500">Game Over!</h2>
+            <p class="text-xl sm:text-2xl mb-2">Final Score: <span id="finalScore">0</span></p>
+            <p id="highScoreDisplay" class="text-lg sm:text-xl mb-6">High Score: <span id="highScoreValue">0</span></p>
+            <button id="restartGameButton" class="btn-game btn-primary text-lg">Play Again</button>
+            <button id="mainMenuButtonFromGameOver" class="btn-game btn-secondary text-lg mt-3">Main Menu</button>
+        </div>
+
+        <div id="crashedChoiceScreen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-60 text-white p-4 z-20">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-4 text-orange-400">Oops! You Crashed!</h2>
+            <div class="space-y-3">
+                <button id="useLifeButton" class="btn-game btn-primary text-lg w-full">Use a Life (<span id="livesLeftChoice">X</span> left)</button>
+                <button id="restartFromCrashButton" class="btn-game btn-secondary text-lg w-full">Restart Game</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="hidden fixed inset-0 modal flex items-center justify-center p-4 z-30">
+        <div class="modal-content w-full max-w-xs sm:max-w-sm text-center">
+            <h3 class="text-2xl font-bold mb-6">Settings</h3>
+            <div class="space-y-3">
+                <button id="resumeSettingsButton" class="btn-game btn-primary w-full">Resume</button> 
+                <button id="restartFromSettingsButton" class="btn-game btn-secondary w-full">Restart Game</button>
+                <button id="soundsMenuButton" class="btn-game btn-primary w-full">Sounds & Music</button> <button id="mainMenuFromSettingsButton" class="btn-game btn-primary w-full">Main Menu</button> </div>
+            <button id="closeSettingsButton" class="btn-game btn-danger w-full mt-6">Close Settings</button>
+        </div>
+    </div>
+
+    <div id="soundsModal" class="hidden fixed inset-0 modal flex items-center justify-center p-4 z-40">
+        <div class="modal-content w-full max-w-xs sm:max-w-sm text-center">
+            <h3 class="text-2xl font-bold mb-6">Sound Options</h3>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <label for="soundToggle" class="text-lg">Game Sounds:</label>
+                    <input type="checkbox" id="soundToggle" class="form-checkbox h-6 w-6 text-blue-600 rounded" checked>
+                </div>
+                <div class="flex justify-between items-center">
+                    <label for="musicToggle" class="text-lg">Background Music:</label>
+                    <input type="checkbox" id="musicToggle" class="form-checkbox h-6 w-6 text-blue-600 rounded" checked>
+                </div>
+                <div class="flex justify-between items-center">
+                    <label for="vibrationToggle" class="text-lg">Vibration (on crash):</label>
+                    <input type="checkbox" id="vibrationToggle" class="form-checkbox h-6 w-6 text-blue-600 rounded" checked>
+                </div>
+            </div>
+            <button id="closeSoundsModalButton" class="btn-game btn-danger w-full mt-8">Back to Settings</button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const pauseResumeButton = document.getElementById('pauseResumeButton');
+        const settingsButton = document.getElementById('settingsButton');
+        const backgroundMusicPlayer = document.getElementById('backgroundMusicPlayer'); 
+        const crashSoundPlayerElement = document.getElementById('crashSoundPlayer'); 
+        const topBar = document.getElementById('topBar'); 
+        
+        const startScreen = document.getElementById('startScreen');
+        
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+        const highScoreValue = document.getElementById('highScoreValue');
+        const restartGameButton = document.getElementById('restartGameButton'); 
+        const mainMenuButtonFromGameOver = document.getElementById('mainMenuButtonFromGameOver');
+
+        const crashedChoiceScreen = document.getElementById('crashedChoiceScreen');
+        const useLifeButton = document.getElementById('useLifeButton');
+        const livesLeftChoiceDisplay = document.getElementById('livesLeftChoice'); 
+        const restartFromCrashButton = document.getElementById('restartFromCrashButton');
+
+        const settingsModal = document.getElementById('settingsModal');
+        const resumeSettingsButton = document.getElementById('resumeSettingsButton'); 
+        const restartFromSettingsButton = document.getElementById('restartFromSettingsButton');
+        const soundsMenuButton = document.getElementById('soundsMenuButton');
+        const mainMenuFromSettingsButton = document.getElementById('mainMenuFromSettingsButton');
+        const closeSettingsButton = document.getElementById('closeSettingsButton');
+
+        const soundsModal = document.getElementById('soundsModal');
+        const soundToggle = document.getElementById('soundToggle');
+        const musicToggle = document.getElementById('musicToggle');
+        const vibrationToggle = document.getElementById('vibrationToggle');
+        const closeSoundsModalButton = document.getElementById('closeSoundsModalButton');
+
+        // Game State
+        let gameState = 'start'; 
+        let score = 0;
+        let lives = 3;
+        const MAX_LIVES = 3;
+        let highScore = localStorage.getItem('buzzyBounceHighScore') || 0;
+        let frames = 0; 
+        let gameSpeed = 2; 
+
+        let isInvincible = false;
+        let invincibilityTimer = 0;
+        const INVINCIBILITY_DURATION = 270; 
+        const BEE_START_X = 50; 
+
+
+        const bee = { x: BEE_START_X, y: 150, width: 45, height: 35, gravity: 0.3, lift: -7, velocity: 0, wingState: 0, wingSpeed: 10, angle: 0 };
+        const pipes = [];
+        const pipeWidth = 70; 
+        const pipeGap = 160; 
+        let pipeSpawnInterval = 100; 
+
+        const clouds = [];
+        const numClouds = 5;
+        const distantHills = [];
+        const numHills = 3;
+
+        let soundEffectsEnabled = true;
+        let musicEnabled = true;
+        let vibrationEnabled = true;
+        let flapSound, scoreSound, clickSound; 
+
+        async function initAudio() {
+            // console.log("Attempting to initialize audio context..."); 
+            await Tone.start(); 
+            // console.log("Audio context started.");
+            
+            flapSound = new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 2, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.15, sustain: 0.01, release: 0.05 } }).toDestination();
+            flapSound.volume.value = -15;
+
+            scoreSound = new Tone.MetalSynth({ frequency: 300, envelope: { attack: 0.001, decay: 0.2, release: 0.1 }, harmonicity: 3.1, modulationIndex: 16, resonance: 2000, octaves: 1.5 }).toDestination();
+            scoreSound.volume.value = -18;
+
+            clickSound = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.05 }, volume: -20 }).toDestination();
+            
+            if (backgroundMusicPlayer) {
+                backgroundMusicPlayer.volume = 0.3; 
+            }
+            if (crashSoundPlayerElement) { 
+                crashSoundPlayerElement.volume = 0.6; 
+            }
+            updateMusicState(); 
+        }
+
+        function playFlapSound() { if (soundEffectsEnabled && flapSound) flapSound.triggerAttackRelease("C4", "32n", Tone.now()); }
+        function playScoreSound() { if (soundEffectsEnabled && scoreSound) scoreSound.triggerAttackRelease("C5", "16n", Tone.now()); }
+        
+        function playCrashSound() { 
+            if (soundEffectsEnabled && crashSoundPlayerElement) {
+                crashSoundPlayerElement.currentTime = 0; 
+                crashSoundPlayerElement.play().catch(error => console.warn("Crash sound play prevented:", error));
+            }
+            if (vibrationEnabled && navigator.vibrate) navigator.vibrate(300); 
+        }
+        function playClickSound() { if (soundEffectsEnabled && clickSound) clickSound.triggerAttackRelease("C5", "32n", Tone.now()); }
+
+        function updateMusicState(forcePlay = false) { 
+            if (!backgroundMusicPlayer) return; 
+
+            if (musicEnabled) {
+                if (forcePlay || (gameState === 'playing' && backgroundMusicPlayer.paused)) {
+                     const playPromise = backgroundMusicPlayer.play();
+                     if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            // console.warn("Background music play was prevented:", error); 
+                        });
+                    }
+                } else if (gameState !== 'playing' && gameState !== 'paused' && !backgroundMusicPlayer.paused && !forcePlay) {
+                    backgroundMusicPlayer.pause();
+                }
+            } else {
+                backgroundMusicPlayer.pause();
+            }
+        }
+        
+        function initializeBackgroundElements() {
+            clouds.length = 0; 
+            for (let i = 0; i < numClouds; i++) { clouds.push({ x: Math.random() * canvas.width, y: Math.random() * (canvas.height * 0.4), radius: Math.random() * 20 + 20, speed: Math.random() * 0.3 + 0.1 }); }
+            distantHills.length = 0;
+            for (let i = 0; i < numHills; i++) { distantHills.push({ x: (canvas.width / (numHills -1)) * i + (Math.random() * 100 - 50), y: canvas.height - (Math.random() * 50 + 50), width: Math.random() * 150 + 100, height: Math.random() * 60 + 40, color: `rgba(100, 180, 100, ${Math.random() * 0.3 + 0.3})`, speed: 0.05 }); }
+        }
+        
+        function resizeCanvas() {
+            const gameArea = document.getElementById('gameContainer');
+            let newWidth, newHeight;
+            if (window.innerWidth < 640) { newWidth = gameArea.clientWidth - 10; newHeight = Math.min(window.innerHeight * 0.6, 500); } 
+            else { newWidth = Math.min(gameArea.clientWidth * 0.8, 700); newHeight = Math.min(gameArea.clientHeight * 0.7, 450); }
+            canvas.width = newWidth; canvas.height = newHeight;
+            if (gameState === 'start') drawStartScreenBackground();
+            else initializeBackgroundElements(); 
+        }
+
+        function drawStartScreenBackground() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#4A90E2'); grad.addColorStop(1, '#7AC9F5'); 
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            for(let i=0; i<50; i++) { ctx.beginPath(); ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2 + 1, 0, Math.PI * 2); ctx.fill(); }
+        }
+
+        function drawInGameBackground() {
+            ctx.fillStyle = '#87CEEB'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            distantHills.forEach(hill => { ctx.fillStyle = hill.color; ctx.beginPath(); ctx.ellipse(hill.x, hill.y, hill.width / 2, hill.height / 2, 0, Math.PI, Math.PI * 2, false); ctx.closePath(); ctx.fill(); });
+            clouds.forEach(cloud => { ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; ctx.beginPath(); ctx.arc(cloud.x, cloud.y, cloud.radius, 0, Math.PI * 2); ctx.arc(cloud.x + cloud.radius * 0.8, cloud.y, cloud.radius * 0.9, 0, Math.PI * 2); ctx.arc(cloud.x - cloud.radius * 0.7, cloud.y + cloud.radius * 0.1, cloud.radius * 0.8, 0, Math.PI * 2); ctx.fill(); });
+        }
+        
+        function drawBee() {
+            ctx.save(); 
+            ctx.translate(bee.x, bee.y); 
+            ctx.rotate(bee.angle); 
+            if (isInvincible && frames % 10 < 5) { ctx.restore(); return; }
+            ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.ellipse(0, 0, bee.width / 2, bee.height / 2, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#000000'; const stripeHeight = bee.height / 2; ctx.fillRect(-bee.width / 4, -stripeHeight / 2, bee.width / 8, stripeHeight); ctx.fillRect(bee.width / 8, -stripeHeight / 2, bee.width / 8, stripeHeight);
+            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(bee.width / 3, -bee.height / 6, bee.width / 10, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(bee.width / 3, -bee.height / 6, bee.width / 15, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(200, 200, 255, 0.7)'; const wingWidth = bee.width / 2.5; const wingHeight = bee.height / 1.5; 
+            ctx.beginPath(); const wing1YOffset = bee.wingState > 0.5 ? -wingHeight / 3 : wingHeight / 4; ctx.ellipse(-bee.width / 5, -bee.height / 4 + wing1YOffset, wingWidth, wingHeight / 2, Math.PI / 8, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); const wing2YOffset = bee.wingState > 0.5 ? -wingHeight / 4 : wingHeight / 3; ctx.ellipse(-bee.width / 6, -bee.height / 3 + wing2YOffset, wingWidth * 0.9, wingHeight / 2.2, Math.PI / 7, 0, Math.PI * 2); ctx.fill();
+            ctx.restore(); 
+        }
+
+        function drawPipes() {
+            pipes.forEach(pipe => {
+                const pipeColor = '#FFA500'; const pipeHighlight = '#FFC04D'; const pipeShadow = '#CC8400';   
+                ctx.fillStyle = pipeColor; ctx.fillRect(pipe.x, 0, pipeWidth, pipe.topHeight);
+                ctx.fillStyle = pipeHighlight; ctx.fillRect(pipe.x + 5, 0, 10, pipe.topHeight);
+                ctx.fillStyle = pipeShadow; ctx.fillRect(pipe.x + pipeWidth - 15, 0, 10, pipe.topHeight);
+                ctx.fillRect(pipe.x - 5, pipe.topHeight - 20, pipeWidth + 10, 20);
+                const bottomPipeY = pipe.topHeight + pipeGap; const bottomPipeHeight = canvas.height - bottomPipeY;
+                ctx.fillStyle = pipeColor; ctx.fillRect(pipe.x, bottomPipeY, pipeWidth, bottomPipeHeight);
+                ctx.fillStyle = pipeHighlight; ctx.fillRect(pipe.x + 5, bottomPipeY, 10, bottomPipeHeight);
+                ctx.fillStyle = pipeShadow; ctx.fillRect(pipe.x + pipeWidth - 15, bottomPipeY, 10, bottomPipeHeight);
+                ctx.fillRect(pipe.x - 5, bottomPipeY, pipeWidth + 10, 20);
+            });
+        }
+
+        function updateLivesDisplay() {
+            livesDisplay.innerHTML = '';
+            for (let i = 0; i < MAX_LIVES; i++) { const heart = document.createElement('span'); heart.classList.add('heart-icon'); heart.textContent = i < lives ? '❤️' : '🖤'; livesDisplay.appendChild(heart); }
+        }
+        
+        function updateInGameBackgroundAndPipes() { 
+            if (gameState === 'playing' || gameState === 'falling') { 
+                clouds.forEach(cloud => { cloud.x -= cloud.speed * gameSpeed * 0.5; if (cloud.x + cloud.radius * 2 < 0) { cloud.x = canvas.width + cloud.radius; cloud.y = Math.random() * (canvas.height * 0.4); } });
+                distantHills.forEach(hill => { hill.x -= hill.speed * gameSpeed * 0.5; if (hill.x + hill.width < 0) { hill.x = canvas.width + hill.width / 2; } });
+                if (gameState === 'playing') { 
+                     if (frames % pipeSpawnInterval === 0) { const topHeight = Math.random() * (canvas.height - pipeGap - 150) + 75; pipes.push({ x: canvas.width, topHeight: topHeight, passed: false }); }
+                }
+                // Pipes are moved but not removed during 'falling' to keep the scene consistent until choice screen
+                for (let i = pipes.length - 1; i >= 0; i--) { 
+                    pipes[i].x -= gameSpeed; 
+                    if (pipes[i].x + pipeWidth < 0 && gameState === 'playing') { // Only remove if playing
+                        pipes.splice(i, 1); 
+                    }
+                } 
+            }
+        }
+
+        function updateBee() {
+            if (gameState === 'playing') {
+                bee.velocity += bee.gravity; bee.y += bee.velocity; bee.angle = 0; 
+                if (frames % bee.wingSpeed === 0) bee.wingState = 1 - bee.wingState; 
+                if (isInvincible) { invincibilityTimer--; if (invincibilityTimer <= 0) isInvincible = false; }
+            }
+        }
+        
+        function updateFallingBeePhysics() {
+            bee.velocity += bee.gravity * 1.3; bee.y += bee.velocity;
+            if (bee.velocity > 2 && bee.angle < Math.PI / 4) bee.angle += 0.02;
+        }
+
+        function checkCollisions() {
+            if (isInvincible) return false; 
+            for (let pipe of pipes) { if (bee.x + bee.width / 2 > pipe.x && bee.x - bee.width / 2 < pipe.x + pipeWidth) { if (bee.y - bee.height / 2 < pipe.topHeight || bee.y + bee.height / 2 > pipe.topHeight + pipeGap) return true; } }
+            if (bee.y - bee.height / 2 < 0) return true; 
+            if (bee.y + bee.height / 2 > canvas.height) return true; 
+            return false; 
+        }
+
+        function updateScore() { 
+            pipes.forEach(pipe => { if (!pipe.passed && pipe.x + pipeWidth < bee.x - bee.width/2) { pipe.passed = true; score++; scoreDisplay.textContent = score; playScoreSound(); if (score % 5 === 0 && gameSpeed < 5) { gameSpeed += 0.1; pipeSpawnInterval = Math.max(70, pipeSpawnInterval - 3); } } });
+        }
+        
+        function flap() {
+            if (gameState === 'playing') { 
+                bee.velocity = bee.lift; 
+                playFlapSound(); 
+            }
+        }
+
+        function resetGameVariables(isFullReset = true) { 
+            if (isFullReset) {
+                console.log("Full reset of game variables (score will be 0).");
+                score = 0; 
+            } else {
+                console.log("Partial reset of game variables (score preserved).");
+            }
+            bee.x = BEE_START_X; 
+            bee.y = canvas.height / 2 - 50; 
+            bee.velocity = 0; 
+            bee.angle = 0;
+            // pipes.length = 0; // Pipes are NOT reset here if isFullReset is false
+            if (isFullReset) { // Only clear pipes on a full reset
+                pipes.length = 0;
+            }
+            frames = 0; 
+            gameSpeed = 2; 
+            pipeSpawnInterval = 100;
+            scoreDisplay.textContent = score; 
+            isInvincible = false; 
+            invincibilityTimer = 0; 
+        }
+
+        function initializeNewGame() {
+            console.log("Initializing new game (to start screen).");
+            resetGameVariables(true); 
+            lives = MAX_LIVES; 
+            updateLivesDisplay(); 
+            highScoreValue.textContent = highScore; 
+            gameState = 'start';
+            topBar.style.display = 'none'; 
+            startScreen.classList.remove('hidden'); startScreen.style.display = 'flex';
+            startScreen.innerHTML = ` <h1 class="text-4xl sm:text-5xl font-bold mb-4 text-yellow-400 drop-shadow-lg">Buzzy Bounce</h1> 
+                                    <p class="text-lg sm:text-xl mb-6 text-center text-gray-100 drop-shadow-md">Tap or Press Space to make the bee fly!</p>
+                                    <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                                        <button id="startGameButton" class="btn-game btn-primary text-xl px-8">Start Game</button>
+                                        <a href="index.html" id="exitGameLink" class="btn-game btn-danger text-xl px-8">Exit</a> 
+                                    </div>`; 
+            reassignStartScreenButtonListeners(); 
+            gameOverScreen.classList.add('hidden'); gameOverScreen.style.display = 'none';
+            crashedChoiceScreen.classList.add('hidden'); crashedChoiceScreen.style.display = 'none';
+            settingsModal.classList.add('hidden'); settingsModal.style.display = 'none';
+            soundsModal.classList.add('hidden'); soundsModal.style.display = 'none';
+            if (backgroundMusicPlayer) backgroundMusicPlayer.pause(); 
+            updateMusicState(); 
+            draw(); 
+        }
+        
+        async function startGame() { 
+            console.log("Attempting to start game from start screen.");
+            if (gameState === 'start') { 
+                console.log("Starting game...");
+                resetGameVariables(true); 
+                initializeBackgroundElements(); 
+                lives = MAX_LIVES; 
+                updateLivesDisplay(); 
+                gameState = 'playing';
+                topBar.style.display = 'flex'; 
+                startScreen.classList.add('hidden'); startScreen.style.display = 'none';
+                gameOverScreen.classList.add('hidden'); gameOverScreen.style.display = 'none';
+                crashedChoiceScreen.classList.add('hidden'); crashedChoiceScreen.style.display = 'none';
+                if (Tone.context.state !== 'running') {
+                    await initAudio(); 
+                }
+                updateMusicState(true); 
+                gameLoop();
+            } else {
+                console.warn("Start game called when not in 'start' state. Current state:", gameState);
+            }
+        }
+
+        function handleCrash() {
+            console.log(`Handling crash. Lives before: ${lives}, Game state: ${gameState}, Score: ${score}`);
+            if (backgroundMusicPlayer && musicEnabled) backgroundMusicPlayer.pause(); 
+            playCrashSound(); 
+            lives--; 
+            updateLivesDisplay(); 
+            gameState = 'falling'; 
+            bee.velocity = -2; 
+            console.log(`Crash handled. Lives after: ${lives}, New game state: ${gameState}, Score: ${score}`);
+        }
+
+        function showCrashedChoiceScreenAfterFall() { 
+            console.log(`Showing crashed choice screen. Lives: ${lives}, Score: ${score}`);
+            gameState = 'crashed'; 
+            topBar.style.display = 'flex'; 
+            crashedChoiceScreen.classList.remove('hidden'); 
+            crashedChoiceScreen.style.display = 'flex';
+
+            startScreen.classList.add('hidden'); startScreen.style.display = 'none';
+            gameOverScreen.classList.add('hidden'); gameOverScreen.style.display = 'none';
+            settingsModal.classList.add('hidden'); settingsModal.style.display = 'none';
+            soundsModal.classList.add('hidden'); soundsModal.style.display = 'none';
+
+            livesLeftChoiceDisplay.textContent = lives; 
+            if (lives > 0) {
+                useLifeButton.classList.remove('hidden'); useLifeButton.style.display = 'block';
+            } else {
+                useLifeButton.classList.add('hidden'); useLifeButton.style.display = 'none';
+            }
+            console.log("Crashed choice screen displayed.");
+        }
+
+        function useLifeAndContinue() {
+            console.log(`Attempting to use life. Current lives: ${lives}, Game state: ${gameState}, Score: ${score}`);
+            if (gameState === 'crashed' && lives > 0) { 
+                console.log("Using life...");
+                crashedChoiceScreen.classList.add('hidden'); 
+                crashedChoiceScreen.style.display = 'none';
+
+                // Reset bee's physical state, preserve score.
+                // Pipes are NOT cleared to continue from the same point.
+                bee.x = BEE_START_X; 
+                bee.y = canvas.height / 2 - 50; 
+                bee.velocity = 0; 
+                bee.angle = 0;
+                // pipes.length = 0; // <<-- THIS LINE IS NOW COMMENTED OUT
+                frames = 0; 
+
+                isInvincible = true; 
+                invincibilityTimer = INVINCIBILITY_DURATION; 
+                gameState = 'playing'; 
+                topBar.style.display = 'flex'; 
+                
+                updateMusicState(true); 
+                console.log(`Life used. Resuming game. New state: ${gameState}, Score: ${score}`);
+                gameLoop(); 
+            } else if (lives <= 0) { 
+                console.warn("Attempted to use life, but no lives left or wrong state.");
+                crashedChoiceScreen.classList.add('hidden'); 
+                crashedChoiceScreen.style.display = 'none';
+                triggerGameOver(); 
+            } else {
+                 console.warn(`useLifeAndContinue called in unexpected state: ${gameState} or lives: ${lives}`);
+            }
+        }
+
+        function triggerGameOver() {
+            console.log(`Triggering Game Over. Final Score: ${score}`);
+            gameState = 'gameover'; 
+            topBar.style.display = 'flex'; 
+            if (score > highScore) { 
+                highScore = score; 
+                localStorage.setItem('buzzyBounceHighScore', highScore); 
+            }
+            finalScoreDisplay.textContent = score; 
+            highScoreValue.textContent = highScore; 
+            gameOverScreen.classList.remove('hidden'); gameOverScreen.style.display = 'flex';
+            crashedChoiceScreen.classList.add('hidden'); crashedChoiceScreen.style.display = 'none';
+            if (backgroundMusicPlayer) backgroundMusicPlayer.pause(); 
+            console.log("Game Over screen displayed.");
+        }
+
+        function directResumeGame() { 
+            console.log("Directly resuming game from settings/close.");
+            gameState = 'playing';
+            pauseResumeButton.textContent = '❚❚';
+            topBar.style.display = 'flex'; 
+            updateMusicState(true);
+            gameLoop();
+        }
+
+        function togglePauseResume() { 
+            playClickSound();
+            if (gameState === 'playing') {
+                gameState = 'paused'; 
+                pauseResumeButton.textContent = '▶️'; 
+                if (backgroundMusicPlayer) backgroundMusicPlayer.pause();
+            } else if (gameState === 'paused') {
+                directResumeGame();
+            }
+        }
+        
+        function draw() { 
+            if (gameState === 'start') {
+                topBar.style.display = 'none'; 
+                drawStartScreenBackground();
+            } else { 
+                topBar.style.display = 'flex'; 
+                drawInGameBackground(); 
+                drawPipes();
+                drawBee(); 
+            }
+        }
+
+        function gameLoop() {
+            if (gameState === 'paused' || gameState === 'crashed' || gameState === 'gameover') { 
+                draw(); 
+                return; 
+            }
+            if (gameState === 'start') { 
+                draw(); 
+                return; 
+            }
+            
+            if (gameState === 'playing') {
+                updateInGameBackgroundAndPipes(); 
+                updateBee(); 
+                updateScore(); 
+                if (checkCollisions()) { 
+                    console.log(`Collision detected in 'playing' state. Score: ${score}, Lives: ${lives}`);
+                    handleCrash(); 
+                    draw(); 
+                    requestAnimationFrame(gameLoop); 
+                    return;
+                }
+            } 
+            else if (gameState === 'falling') {
+                updateInGameBackgroundAndPipes(); 
+                updateFallingBeePhysics();
+                if (bee.y > canvas.height + bee.height * 2) {
+                    console.log(`Bee fell off screen. Lives: ${lives}, Score: ${score}`);
+                    if (lives > 0) {
+                        showCrashedChoiceScreenAfterFall();
+                    } else {
+                        triggerGameOver(); 
+                    }
+                    draw(); 
+                    return; 
+                }
+            }
+            draw(); 
+            if (gameState === 'playing' || (gameState === 'falling' && bee.y <= canvas.height + bee.height * 2) ) {
+                frames++; 
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        function reassignStartScreenButtonListeners() {
+            const sgButton = document.getElementById('startGameButton');
+            const exitLink = document.getElementById('exitGameLink'); 
+
+            if (sgButton) {
+                const newSgButton = sgButton.cloneNode(true);
+                sgButton.parentNode.replaceChild(newSgButton, sgButton);
+                newSgButton.addEventListener('click', (e) => { playClickSound(); e.stopPropagation(); startGame(); });
+            }
+            if (exitLink) {
+                 const newExitLink = exitLink.cloneNode(true);
+                 exitLink.parentNode.replaceChild(newExitLink, exitLink);
+                 newExitLink.addEventListener('click', () => {
+                    playClickSound();
+                    if (backgroundMusicPlayer) backgroundMusicPlayer.pause(); 
+                 });
+            }
+        }
+
+        canvas.addEventListener('click', () => { if(gameState === 'playing') flap(); });
+        document.addEventListener('keydown', (e) => { 
+            if (e.code === 'Space') {
+                e.preventDefault(); 
+                if(gameState === 'playing') flap(); 
+            }
+        });
+        canvas.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            if(gameState === 'playing') flap(); 
+        });
+
+        reassignStartScreenButtonListeners(); 
+        restartGameButton.addEventListener('click', () => { playClickSound(); initializeNewGame(); }); 
+        mainMenuButtonFromGameOver.addEventListener('click', () => { playClickSound(); initializeNewGame(); }); 
+        useLifeButton.addEventListener('click', () => { playClickSound(); useLifeAndContinue(); });
+        restartFromCrashButton.addEventListener('click', () => { playClickSound(); crashedChoiceScreen.classList.add('hidden'); crashedChoiceScreen.style.display = 'none'; initializeNewGame(); }); 
+        
+        pauseResumeButton.addEventListener('click', togglePauseResume); 
+        
+        settingsButton.addEventListener('click', () => {
+            playClickSound();
+            if (gameState === 'playing' || gameState === 'paused') {
+                const wasPlaying = gameState === 'playing';
+                if(wasPlaying) { 
+                    gameState = 'paused'; 
+                    pauseResumeButton.textContent = '▶️';
+                    if (backgroundMusicPlayer) backgroundMusicPlayer.pause();
+                }
+                settingsModal.dataset.wasPlaying = wasPlaying; 
+                settingsModal.classList.remove('hidden'); settingsModal.style.display = 'flex';
+            } else if (gameState === 'start' || gameState === 'gameover' || gameState === 'crashed' || gameState === 'falling') {
+                settingsModal.dataset.wasPlaying = "false";
+                settingsModal.classList.remove('hidden'); settingsModal.style.display = 'flex';
+            }
+        });
+        closeSettingsButton.addEventListener('click', () => {
+            playClickSound(); 
+            settingsModal.classList.add('hidden'); settingsModal.style.display = 'none';
+            if (settingsModal.dataset.wasPlaying === "true" && gameState === 'paused') {
+                directResumeGame(); 
+            }
+        });
+        resumeSettingsButton.addEventListener('click', () => { 
+            playClickSound(); 
+            settingsModal.classList.add('hidden'); settingsModal.style.display = 'none';
+            if (settingsModal.dataset.wasPlaying === "true" && gameState === 'paused') {
+                directResumeGame(); 
+            } else if (gameState === 'start' || gameState === 'gameover' || gameState === 'crashed' || gameState === 'falling') {
+                initializeNewGame();
+            }
+        });
+        restartFromSettingsButton.addEventListener('click', () => { playClickSound(); settingsModal.classList.add('hidden'); settingsModal.style.display = 'none'; initializeNewGame(); }); 
+        mainMenuFromSettingsButton.addEventListener('click', () => { playClickSound(); settingsModal.classList.add('hidden'); settingsModal.style.display = 'none'; initializeNewGame(); }); 
+        
+        soundsMenuButton.addEventListener('click', () => { playClickSound(); soundsModal.classList.remove('hidden'); soundsModal.style.display = 'flex'; });
+        closeSoundsModalButton.addEventListener('click', () => { playClickSound(); soundsModal.classList.add('hidden'); soundsModal.style.display = 'none'; });
+        
+        soundToggle.addEventListener('change', (e) => { soundEffectsEnabled = e.target.checked; playClickSound(); });
+        musicToggle.addEventListener('change', (e) => { 
+            musicEnabled = e.target.checked; 
+            updateMusicState(); 
+            playClickSound();
+        });
+        vibrationToggle.addEventListener('change', (e) => { vibrationEnabled = e.target.checked; playClickSound(); });
+        
+        window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+
+        resizeCanvas(); 
+        initializeNewGame(); 
+    </script>
+</body>
+</html>
